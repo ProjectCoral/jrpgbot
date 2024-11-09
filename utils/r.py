@@ -2,7 +2,6 @@ import random
 import sqlite3
 
 """
-
 .r 普通掷骰指令
 
 用法：.r [掷骰表达式] ([掷骰原因]) 或.r [掷骰原因] [掷骰表达式]：([掷骰次数]#)[骰子个数]d[骰子面数](b[奖励骰个数])(p[惩罚骰个数])(k[取点数最大的骰子数])
@@ -18,23 +17,6 @@ import sqlite3
     .rb2 瞄准后偷袭	//2个奖励骰
     .rh 心理学	//暗骰，结果通过私聊发送
     .rs1D10+1D6+3 沙鹰伤害	//省略单个骰子的点数，直接给结果 //现版本开头的r不再可用o或d代替 //一次掷骰超过20个将会自动排序
-
-
-sqlite3数据库：
-
-CREATE TABLE IF NOT EXISTS users 
-(user_id INTEGER PRIMARY KEY, 
-name TEXT, 
-str INTEGER, 
-con INTEGER, 
-siz INTEGER, 
-dex INTEGER, 
-app INTEGER, 
-int INTEGER, 
-pow INTEGER, 
-edu INTEGER, 
-luk INTEGER, 
-san INTEGER)
 """
 
 def register_function(jrpg_functions, sqlite_conn):
@@ -52,38 +34,53 @@ class RollDice:
     async def r(self, args, sender_user_id, group_id):
         # 确保 args 是一个字符串, 是列表进行处理
         if isinstance(args, list):
-            args = ''.join(args)
+            args = ' '.join(args)
 
         if not args:
             # 默认使用1d100
             args = '1d100'
 
-        if args.startswith('('):
-            reason = args[1:args.find(')')]
-            args = args[args.find(')') + 1:].strip()
+        def contains_special_chars(s, special_chars):
+            return any(char in s for char in special_chars)
+        special_chars = ['+', '-', '*', '/', '#', 'd', 'b', 'p', 'k']
+
+        # 按空格分割
+        parts = args.split()
+
+        if len(parts) > 1:
+            if not contains_special_chars(parts[0], special_chars):
+                reason = parts[0]
+                dice_expr = parts[1]
+            elif not contains_special_chars(parts[1], special_chars):
+                reason = parts[1]
+                dice_expr = parts[0]
+            else:
+                reason = ''
+                dice_expr = args
         else:
             reason = ''
+            dice_expr = args
 
-        if '#' in args:
-            times, args = args.split('#')
+        if '#' in dice_expr:
+            times, dice_expr = dice_expr.split('#', 1)
             times = int(times) if times.isdigit() else 1
         else:
             times = 1
 
-        if 'd' not in args:
+        if 'd' not in dice_expr:
             return "请输入骰子表达式！"
 
-        args = args.split('d')
-        if len(args) != 2:
+        dice_parts = dice_expr.split('d')
+        if len(dice_parts) != 2:
             return "请输入正确的骰子表达式！"
 
-        dice_num, dice_side = args
+        dice_num, dice_side = dice_parts
         dice_num = int(dice_num) if dice_num.isdigit() else 1
         dice_side = int(dice_side) if dice_side.isdigit() else 6  # 默认骰子面数为6
 
-        bonus_num = self.extract_num(args, 'b')
-        penalty_num = self.extract_num(args, 'p')
-        keep_num = self.extract_num(args, 'k')
+        bonus_num = self.extract_num(dice_expr, 'b')
+        penalty_num = self.extract_num(dice_expr, 'p')
+        keep_num = self.extract_num(dice_expr, 'k')
 
         # 数值合法性检查
         if dice_num > 100 or dice_side > 1000 or bonus_num > 100 or penalty_num > 100 or keep_num > 100:

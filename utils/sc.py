@@ -25,8 +25,21 @@ app INTEGER,
 int INTEGER, 
 pow INTEGER, 
 edu INTEGER, 
-luk INTEGER, 
-san INTEGER)
+luk INTEGER)
+CREATE TABLE IF NOT EXISTS status
+(user_id INTEGER PRIMARY KEY, 
+name TEXT, 
+hp INTEGER, 
+mp INTEGER, 
+dmg TEXT, 
+def TEXT, 
+san INTEGER
+)
+CREATE TABLE IF NOT EXISTS skills
+(user_id INTEGER PRIMARY KEY, 
+name TEXT, 
+skillname TEXT, 
+expression TEXT)
 """
 
 def register_function(jrpg_functions, sqlite_conn):
@@ -96,7 +109,12 @@ class SanCheck:
         loss_san = new_san - current_san
 
         if new_san <= 0:
-            result_text = f"理智检定结果: {roll_result}, 理智耗尽，gg"
+            result_text = f"理智检定结果: {roll_result}, 当前SAN值: {new_san}[{loss_san}], 理智耗尽"
+            # 尝试撕卡
+            # with self.sqlite_conn:
+            #     self.sqlite_conn.execute("DELETE FROM users WHERE user_id=?", (sender_user_id,))
+            #     self.sqlite_conn.execute("DELETE FROM status WHERE user_id=?", (sender_user_id,))
+            #     self.sqlite_conn.execute("DELETE FROM skills WHERE user_id=?", (sender_user_id,))
         elif loss_san <= -5:
             result_text = f"理智检定结果: {roll_result}, 当前SAN值: {new_san}[{loss_san}], 需要一次INT检定（要疯喽）"
         else:
@@ -107,7 +125,7 @@ class SanCheck:
 
     def get_current_san(self, user_id, provided_san=None):
         cursor = self.sqlite_conn.cursor()
-        cursor.execute("SELECT san FROM users WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT san FROM status WHERE user_id = ?", (user_id,))
         result = cursor.fetchone()
         if result:
             return provided_san if provided_san is not None else result[0]
@@ -123,7 +141,7 @@ class SanCheck:
 
     def update_san(self, user_id, new_san):
         cursor = self.sqlite_conn.cursor()
-        cursor.execute("UPDATE users SET san = ? WHERE user_id = ?", (new_san, user_id))
+        cursor.execute("UPDATE status SET san = ? WHERE user_id = ?", (new_san, user_id))
         self.sqlite_conn.commit()
 
     def parse_dice(self, dice_str):

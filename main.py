@@ -104,8 +104,23 @@ class JRPGBot:
                                 int INTEGER, 
                                 pow INTEGER, 
                                 edu INTEGER, 
-                                luk INTEGER, 
-                                san INTEGER)''')
+                                luk INTEGER)''')
+                self.conn.execute('''
+                                CREATE TABLE IF NOT EXISTS status
+                                (user_id INTEGER PRIMARY KEY, 
+                                name TEXT, 
+                                hp INTEGER, 
+                                mp INTEGER, 
+                                dmg TEXT,
+                                def TEXT, 
+                                san INTEGER
+                                )''')
+                self.conn.execute('''
+                                CREATE TABLE IF NOT EXISTS skills
+                                (user_id INTEGER PRIMARY KEY, 
+                                name TEXT, 
+                                skillname TEXT, 
+                                expression TEXT)''')
         except sqlite3.Error as e:
             raise e
         logger.info("Loaded database.")

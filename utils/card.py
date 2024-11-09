@@ -29,8 +29,21 @@ app INTEGER,
 int INTEGER, 
 pow INTEGER, 
 edu INTEGER, 
-luk INTEGER, 
-san INTEGER)
+luk INTEGER)
+CREATE TABLE IF NOT EXISTS status
+(user_id INTEGER PRIMARY KEY, 
+name TEXT, 
+hp INTEGER, 
+mp INTEGER, 
+dmg TEXT, 
+def TEXT, 
+san INTEGER
+)
+CREATE TABLE IF NOT EXISTS skills
+(user_id INTEGER PRIMARY KEY, 
+name TEXT, 
+skillname TEXT, 
+expression TEXT)
 """
 
 def register_function(jrpg_functions, sqlite_conn):
@@ -46,7 +59,7 @@ class Card:
 
     async def coc(self, args, sender_user_id, group_id):
         if isinstance(args, list):
-            args =''.join(args)
+            args =' '.join(args)
 
         if 'd' in args:
             # 分割参数
@@ -62,16 +75,35 @@ class Card:
                 POW = int(args[8])
                 edu = int(args[9])
                 luk = int(args[10])
-                san = POW
+                # 计算点数
                 point = str + con + siz + dex + app + INT + POW + edu
+                san = POW
+                HP = (siz + con) // 2
+                MP = POW // 5
+                if 2 <= str + siz <= 64:
+                    DMG = -2
+                    DEF = -2
+                elif 65 <= str + siz <= 84:
+                    DMG = -1
+                    DEF = -1
+                elif 85 <= str + siz <= 124:
+                    DMG = 0
+                    DEF = 0
+                elif 125 <= str + siz <= 164:
+                    DMG = '1d4'
+                    DEF = 1
+                else:
+                    DMG = '1d6'
+                    DEF = 2
                 # 插入数据库
                 with self.sqlite_conn:
-                    self.sqlite_conn.execute("INSERT INTO users (user_id, name, str, con, siz, dex, app, int, pow, edu, luk, san) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (sender_user_id, name, str, con, siz, dex, app, INT, POW, edu, luk, san))
-                return f"你已成功创建{name}的人物！\n点数：{point}\n属性：\n{self.rich_text(str, con, siz, dex, app, INT, POW, edu, luk)}\nSAN{san}"
+                    self.sqlite_conn.execute("INSERT INTO users (user_id, name, str, con, siz, dex, app, int, pow, edu, luk) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (sender_user_id, name, str, con, siz, dex, app, INT, POW, edu, luk))
+                    self.sqlite_conn.execute("INSERT INTO status (user_id, name, hp, mp, dmg, def, san) VALUES (?, ?, ?, ?, ?, ?, ?)", (sender_user_id, name, HP, MP, DMG, DEF, san))
+                return f"你已成功创建{name}的人物！\n点数：{point}\n属性：\n{self.rich_text(str, con, siz, dex, app, INT, POW, edu, luk)}\n状态：\nHP：{HP}\nMP：{MP}\nDMG：{DMG}\nDEF：{DEF}\nSAN：{san}"
             except Exception as e:
                 return f"参数错误，请检查输入！\n{e}"
         # 默认生成7版人物
-        if args is None:
+        if not args:
             name = '未命名'
         else:
             name = args
@@ -82,22 +114,10 @@ class Card:
             if row is not None:
                 # 如果存在，则删除对应的记录
                 self.sqlite_conn.execute("DELETE FROM users WHERE user_id=?", (sender_user_id,))
+                self.sqlite_conn.execute("DELETE FROM status WHERE user_id=?", (sender_user_id,))
+                self.sqlite_conn.execute("DELETE FROM skills WHERE user_id=?", (sender_user_id,))
 
             # 随机生成属性
-            """
-            范例人物
-            属性名称	骰点	结果	半值	五分之一
-            力量STR	3d6x5	60	30	12
-            体质CON	3d6x5	50	25	10
-            体型SIZ	(2d6+6)x5	60	30	12
-            敏捷DEX	3d6x5	55	27	11
-            外貌APP	3d6x5	60	30	12
-            智力INT	(2d6+6)x5	75	37	15
-            意志POW	3d6x5	70	35	14
-            教育EDU	(2d6+6)x5	70	35	14
-            幸运LUK	3d6x5	65	-	-
-            理智SAN	初始值等于意志数据	70	-	-
-            """
             str = (random.randint(1, 6) + random.randint(1, 6) + random.randint(1, 6)) * 5
             con = (random.randint(1, 6) + random.randint(1, 6) + random.randint(1, 6)) * 5
             siz = (random.randint(1, 6) + random.randint(1, 6) + 6) * 5
@@ -107,12 +127,30 @@ class Card:
             POW = (random.randint(1, 6) + random.randint(1, 6) + random.randint(1, 6)) * 5
             edu = (random.randint(1, 6) + random.randint(1, 6) + 6) * 5
             luk = (random.randint(1, 6) + random.randint(1, 6) + random.randint(1, 6)) * 5
+            # 计算点数
+            point = str + con + siz + dex + app + INT + POW + edu
             san = POW
+            HP = (siz + con) // 2
+            MP = POW // 5
+            if 2 <= str + siz <= 64:
+                DMG = -2
+                DEF = -2
+            elif 65 <= str + siz <= 84:
+                DMG = -1
+                DEF = -1
+            elif 85 <= str + siz <= 124:
+                DMG = 0
+                DEF = 0
+            elif 125 <= str + siz <= 164:
+                DMG = '1d4'
+                DEF = 1
+            else:
+                DMG = '1d6'
+                DEF = 2
             # 插入数据库
-            self.sqlite_conn.execute("INSERT INTO users (user_id, name, str, con, siz, dex, app, int, pow, edu, luk, san) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (sender_user_id, name, str, con, siz, dex, app, INT, POW, edu, luk, san))
-        # 计算点数
-        point = str + con + siz + dex + app + INT + POW + edu
-        return f"你已成功创建{name}的人物！\n点数：{point}\n属性：\n{self.rich_text(str, con, siz, dex, app, INT, POW, edu, luk)}\nSAN{san}"
+            self.sqlite_conn.execute("INSERT INTO users (user_id, name, str, con, siz, dex, app, int, pow, edu, luk) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (sender_user_id, name, str, con, siz, dex, app, INT, POW, edu, luk))
+            self.sqlite_conn.execute("INSERT INTO status (user_id, name, hp, mp, dmg, def, san) VALUES (?, ?, ?, ?, ?, ?, ?)", (sender_user_id, name, HP, MP, DMG, DEF, san))
+        return f"你已成功创建{name}的人物！\n点数：{point}\n属性：\n{self.rich_text(str, con, siz, dex, app, INT, POW, edu, luk)}\n状态：\nHP：{HP}\nMP：{MP}\nDMG：{DMG}\nDEF：{DEF}\nSAN：{san}"
                 
 
     def rich_text(self, STR, con, siz, dex, app, int, POW, edu, luk):
