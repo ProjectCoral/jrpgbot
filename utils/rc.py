@@ -13,34 +13,6 @@ from typing import List, Tuple
     .rc 敏捷-10	//修正后成功率必须在1-1000内
     .rc 3#p 手枪	//轮数与奖惩骰至多9个
 
-sqlite3数据库：
-
-CREATE TABLE IF NOT EXISTS users 
-(user_id INTEGER PRIMARY KEY, 
-name TEXT, 
-str INTEGER, 
-con INTEGER, 
-siz INTEGER, 
-dex INTEGER, 
-app INTEGER, 
-int INTEGER, 
-pow INTEGER, 
-edu INTEGER, 
-luk INTEGER)
-CREATE TABLE IF NOT EXISTS status
-(user_id INTEGER PRIMARY KEY, 
-name TEXT, 
-hp INTEGER, 
-mp INTEGER, 
-dmg TEXT, 
-def TEXT, 
-san INTEGER
-)
-CREATE TABLE IF NOT EXISTS skills
-(user_id INTEGER PRIMARY KEY, 
-name TEXT, 
-skillname TEXT, 
-expression TEXT)
 """
 
 def register_function(jrpg_functions, sqlite_conn):
@@ -64,7 +36,7 @@ class RollCheck:
             '幸运': 'luk'
         }
 
-    async def rc(self, args: str, sender_user_id: int, group_id: int) -> str:
+    async def rc(self, args: str, userslot, sender_user_id: int, group_id: int) -> str:
         # 确保 args 是一个字符串, 是列表进行处理
         if isinstance(args, list):
             args = ' '.join(args)
@@ -87,7 +59,8 @@ class RollCheck:
             args = parts[1].strip()
         
         # 获取用户属性
-        user_attributes = self.get_user_attributes(sender_user_id)
+        slot_id = userslot.get(sender_user_id)
+        user_attributes = self.get_user_attributes(sender_user_id, slot_id)
         if not user_attributes:
             return '用户未设置属性，请先设置属性'
         
@@ -104,12 +77,19 @@ class RollCheck:
         
         return '\n'.join(results)
 
-    def get_user_attributes(self, user_id: int) -> dict:
-        self.cursor.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
+    def get_user_attributes(self, user_id: int, slot_id: int) -> dict:
+        user_attributes = {}
+        self.cursor.execute("SELECT * FROM users WHERE user_id=? AND slot_id=?", (user_id, slot_id,))
         row = self.cursor.fetchone()
         if row:
-            return {col[0]: row[i] for i, col in enumerate(self.cursor.description)}
-        return {}
+            user_attributes = {col[0]: row[i] for i, col in enumerate(self.cursor.description)}
+        
+        self.cursor.execute("SELECT * FROM skills WHERE user_id=? AND slot_id=?", (user_id, slot_id,))
+        row = self.cursor.fetchone()
+        if row:
+            for i, col in enumerate(self.cursor.description):
+                user_attributes[col[0]] = row[i]
+        return user_attributes
 
     def parse_skill_name_and_success_rate(self, args: str, user_attributes: dict) -> Tuple[str, int]:
         # 处理特殊关键词

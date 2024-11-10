@@ -31,7 +31,7 @@ class RollDice:
         self.conn = sqlite_conn
         self.cursor = self.conn.cursor()
 
-    async def r(self, args, sender_user_id, group_id):
+    async def r(self, args, userslot, sender_user_id, group_id):
         # 确保 args 是一个字符串, 是列表进行处理
         if isinstance(args, list):
             args = ' '.join(args)

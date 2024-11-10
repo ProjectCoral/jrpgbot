@@ -62,7 +62,7 @@ class JRPGBot:
             return {"message": f"Command {command} not found.", "sender_user_id": sender_user_id, "group_id": group_id}, True, False, 1
         
         try:
-            result = await self.jrpg_functions[command](args, sender_user_id, group_id)
+            result = await self.jrpg_functions[command](args, self.userslot, sender_user_id, group_id)
         except Exception as e:
             logger.exception(f"Error executing command {command}: {e}")
             return {"message": f"Error executing command: {e}", "sender_user_id": sender_user_id, "group_id": group_id}, True, False, 1
@@ -74,7 +74,7 @@ class JRPGBot:
 
         return {"message": result, "sender_user_id": sender_user_id, "group_id": group_id}, True, False, 1
     
-    async def bot_control(self, args, sender_user_id, group_id):
+    async def bot_control(self, args, userslot, sender_user_id, group_id):
         if not self.perm_system.check_perm(["jrpgbot", "jrpgbot.control"], sender_user_id, group_id):
             return "You don't have permission to control the jrpgbot plugin."
         if len(args) > 0 and args[0].startswith("on"):
@@ -94,7 +94,8 @@ class JRPGBot:
             with self.conn:
                 self.conn.execute('''
                                 CREATE TABLE IF NOT EXISTS users 
-                                (user_id INTEGER PRIMARY KEY, 
+                                (user_id INTEGER, 
+                                slot_id INTEGER, 
                                 name TEXT, 
                                 str INTEGER, 
                                 con INTEGER, 
@@ -104,28 +105,56 @@ class JRPGBot:
                                 int INTEGER, 
                                 pow INTEGER, 
                                 edu INTEGER, 
-                                luk INTEGER)''')
+                                luk INTEGER,
+                                PRIMARY KEY (user_id, slot_id))''')
                 self.conn.execute('''
                                 CREATE TABLE IF NOT EXISTS status
-                                (user_id INTEGER PRIMARY KEY, 
-                                name TEXT, 
+                                (user_id INTEGER, 
+                                slot_id INTEGER, 
                                 hp INTEGER, 
                                 mp INTEGER, 
                                 dmg TEXT,
                                 def TEXT, 
-                                san INTEGER
-                                )''')
+                                san INTEGER,
+                                PRIMARY KEY (user_id, slot_id))''')
                 self.conn.execute('''
                                 CREATE TABLE IF NOT EXISTS skills
-                                (user_id INTEGER PRIMARY KEY, 
-                                name TEXT, 
+                                (user_id INTEGER,
+                                slot_id INTEGER,
                                 skillname TEXT, 
-                                expression TEXT)''')
+                                expression TEXT,
+                                PRIMARY KEY (user_id, slot_id, skillname))''')
         except sqlite3.Error as e:
             raise e
+        self.userslot = UserSlot("./data/jrpgbot/userslot.json")
         logger.info("Loaded database.")
 
 
     async def info(self, *args, **kwargs):
         coral_ver = self.config.get("coral_version")
         return f"JRPG Bot v0.1.0, by Akina絵\nRunning on Coral {coral_ver}"
+    
+
+class UserSlot:
+    slot_path = "./data/jrpgbot/userslot.json"
+
+    def __init__(self, slot_path):
+        if not os.path.exists(slot_path):
+            self.slot_id = {}
+        else:
+            with open(slot_path, "r", encoding="utf-8") as f:
+                self.slot_id = json.load(f)
+
+    def get(self, user_id):
+        if int(user_id) not in self.slot_id:
+            self.slot_id[int(user_id)] = 1
+            self.save()
+        return self.slot_id[int(user_id)]
+
+    def set(self, user_id, slot_id):
+        self.slot_id[int(user_id)] = int(slot_id)
+        self.save()
+
+    def save(self):
+        with open(self.slot_path, "w", encoding="utf-8") as f:
+            json.dump(self.slot_id, f, indent=4)
