@@ -139,22 +139,24 @@ class UserSlot:
     slot_path = "./data/jrpgbot/userslot.json"
 
     def __init__(self, slot_path):
-        if not os.path.exists(slot_path):
-            self.slot_id = {}
-        else:
-            with open(slot_path, "r", encoding="utf-8") as f:
-                self.slot_id = json.load(f)
+        self.slot_path = slot_path
+        if not os.path.exists(self.slot_path):
+            with open(self.slot_path, "w") as f:
+                json.dump({}, f, indent=4)
+        with open(self.slot_path, "r") as f:
+            self.slot_id = json.load(f)
 
     def get(self, user_id):
-        if int(user_id) not in self.slot_id:
-            self.slot_id[int(user_id)] = 1
+        user_id = str(user_id)
+        if user_id not in self.slot_id:
+            self.slot_id[user_id] = 1
             self.save()
-        return self.slot_id[int(user_id)]
+        return self.slot_id[user_id]
 
     def set(self, user_id, slot_id):
-        self.slot_id[int(user_id)] = int(slot_id)
+        self.slot_id[str(user_id)] = int(slot_id)
         self.save()
 
     def save(self):
-        with open(self.slot_path, "w", encoding="utf-8") as f:
+        with open(self.slot_path, "w") as f:
             json.dump(self.slot_id, f, indent=4)
