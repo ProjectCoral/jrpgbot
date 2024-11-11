@@ -21,14 +21,15 @@ class jrrp:
             with self.conn:
                 self.conn.execute('''
                     CREATE TABLE IF NOT EXISTS jrrp (
-                        user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER,
                         date TEXT,
-                        value INTEGER)
+                        value INTEGER,
+                        PRIMARY KEY (user_id, date))
                 ''')
         except sqlite3.Error as e:
             raise e
         
-    async def feach(self, args, sender_user_id, group_id):
+    async def feach(self, args, userslot, sender_user_id, group_id):
         try:
             with self.conn:
                 cursor = self.conn.cursor()
@@ -37,8 +38,8 @@ class jrrp:
                 if row is None:
                     value = random.randint(1, 100)
                     cursor.execute("INSERT INTO jrrp (user_id, date, value) VALUES (?,?,?)", (sender_user_id, datetime.date.today().strftime("%Y-%m-%d"), value))
-                    return "你今天的人品值是 " + str(value) + " ！"
+                    return f"你今天的人品值是 {value} ！"
                 else:
-                    return "你今天的人品值是 " + str(row[0]) + " ！"
+                    return f"你今天的人品值是 {row[0]} ！"
         except sqlite3.Error as e:
             raise e

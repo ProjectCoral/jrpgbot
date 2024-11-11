@@ -69,6 +69,16 @@ class RollCheck:
         if not skill_name:
             return '无效的检定内容'
         
+        # 修正成功率
+        if success_rate is None:
+            return f'无效的成功率或 {skill_name} 录入数据错误'
+        
+        success_rate = int(success_rate)
+        if success_rate < 1:
+            success_rate = 1
+        elif success_rate > 100:
+            success_rate = 100
+
         # 执行检定
         results = []
         for _ in range(rounds):
@@ -79,16 +89,21 @@ class RollCheck:
 
     def get_user_attributes(self, user_id: int, slot_id: int) -> dict:
         user_attributes = {}
+        
+        # 查询 users 表
         self.cursor.execute("SELECT * FROM users WHERE user_id=? AND slot_id=?", (user_id, slot_id,))
         row = self.cursor.fetchone()
         if row:
-            user_attributes = {col[0]: row[i] for i, col in enumerate(self.cursor.description)}
+            user_attributes.update({col[0]: row[i] for i, col in enumerate(self.cursor.description)})
         
+        # 查询 skills 表
         self.cursor.execute("SELECT * FROM skills WHERE user_id=? AND slot_id=?", (user_id, slot_id,))
-        row = self.cursor.fetchone()
-        if row:
-            for i, col in enumerate(self.cursor.description):
-                user_attributes[col[0]] = row[i]
+        rows = self.cursor.fetchall()
+        for row in rows:
+            skillname = row[2]
+            expression = row[3]
+            user_attributes[skillname] = expression
+        
         return user_attributes
 
     def parse_skill_name_and_success_rate(self, args: str, user_attributes: dict) -> Tuple[str, int]:
@@ -103,10 +118,7 @@ class RollCheck:
                     return skill_name, 20
                 elif keyword == '极难':
                     return skill_name, 10
-    
-        # 处理特殊技能名
-        
-    
+       
         # 分割技能名和表达式
         expression_parts = args.split()
         skill_name = expression_parts[0]
@@ -116,6 +128,12 @@ class RollCheck:
             attr = self.special_skills[skill_name]
             if attr in user_attributes:
                 return skill_name, user_attributes[attr]
+            
+        # 如果只传入技能名，则尝试获取成功率
+        if len(expression_parts) == 1:
+            if skill_name in user_attributes:
+                success_rate = user_attributes[skill_name]
+                return skill_name, success_rate
     
         # 处理表达式
         expression = ''.join(expression_parts[1:])
@@ -126,6 +144,20 @@ class RollCheck:
     
         try:
             success_rate = eval(expression)
+            if not success_rate.isdigit():
+                if 'd' in success_rate:
+                    dice_num, dice_size = success_rate.split('d')
+                    try:
+                        dice_num = int(dice_num)
+                        dice_size = int(dice_size)
+                        if dice_num < 1 or dice_size < 1:
+                            return None, None
+                        success_rate = sum([random.randint(1, dice_size) for _ in range(dice_num)])
+                        return skill_name, success_rate
+                    except ValueError:
+                        return None, None
+                else:
+                    return None, None
             if success_rate < 1 or success_rate > 1000:
                 return None, None
             return skill_name, success_rate

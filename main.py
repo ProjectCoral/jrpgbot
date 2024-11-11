@@ -56,7 +56,7 @@ class JRPGBot:
             return {"message": "Invalid command format.", "sender_user_id": sender_user_id, "group_id": group_id}, True, False, 1
         
         if not self.bot_status and command not in ["bot", "info"]:
-            return {"message": None, "sender_user_id": sender_user_id, "group_id": group_id}, False, False, 1
+                return {"message": None, "sender_user_id": sender_user_id, "group_id": group_id}, False, False, 1
 
         if command not in self.jrpg_functions:
             return {"message": f"Command {command} not found.", "sender_user_id": sender_user_id, "group_id": group_id}, True, False, 1
@@ -69,6 +69,13 @@ class JRPGBot:
 
         if group_id == -1:
             result = f"警告：你正在私聊模式下使用JRPG Bot，可能无法正常运行。\n{result}"
+
+        slot_id = self.userslot.get(sender_user_id)
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT name FROM users WHERE user_id =? AND slot_id =?", (sender_user_id, slot_id,))
+        name = cursor.fetchone()
+        if name is not None:
+            result = f"[{name[0]}] {result}"
 
         result = f"[CQ:at,qq={sender_user_id}]\n{result}"
 
@@ -132,7 +139,7 @@ class JRPGBot:
 
     async def info(self, *args, **kwargs):
         coral_ver = self.config.get("coral_version")
-        return f"JRPG Bot v0.1.0, by Akina絵\nRunning on Coral {coral_ver}"
+        return f"JRPG Bot v0.1.1, by Akina絵\nRunning on Coral {coral_ver}"
     
 
 class UserSlot:
