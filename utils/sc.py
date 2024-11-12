@@ -14,14 +14,18 @@ import sqlite3
 
 """
 
-def register_function(jrpg_functions, sqlite_conn):
-    SanCheck_instance = SanCheck(sqlite_conn)
+def register_function(jrpg_functions, jrpg_events, sqlite_conn):
+    SanCheck_instance = SanCheck(jrpg_functions, jrpg_events, sqlite_conn)
     jrpg_functions['sc'] = SanCheck_instance.sc
 
 class SanCheck:
+    jrpg_functions = None
+    jrpg_events = None
     sqlite_conn = None
 
-    def __init__(self, sqlite_conn):
+    def __init__(self, jrpg_functions, jrpg_events, sqlite_conn):
+        self.jrpg_functions = jrpg_functions
+        self.jrpg_events = jrpg_events
         self.sqlite_conn = sqlite_conn
 
     async def sc(self, args, userslot, sender_user_id, group_id):
@@ -83,17 +87,18 @@ class SanCheck:
 
         if new_san <= 0:
             result_text = f"理智检定结果: {roll_result}, 当前SAN值: {new_san}[{loss_san}], 理智耗尽"
-            # 尝试撕卡
-            # with self.sqlite_conn:
-            #     self.sqlite_conn.execute("DELETE FROM users WHERE user_id=?", (sender_user_id,))
-            #     self.sqlite_conn.execute("DELETE FROM status WHERE user_id=?", (sender_user_id,))
-            #     self.sqlite_conn.execute("DELETE FROM skills WHERE user_id=?", (sender_user_id,))
         elif loss_san <= -5:
             result_text = f"理智检定结果: {roll_result}, 当前SAN值: {new_san}[{loss_san}], 需要一次INT检定（要疯喽）"
         else:
             result_text = f"理智检定结果: {roll_result}, 当前SAN值: {new_san}[{loss_san}]"
         if reason:
             result_text = f" ({reason})" + result_text
+            
+        page_content = None
+        page_content =  await self.jrpg_events['auto_event']('sc_update', 'san', sender_user_id, group_id)
+        if page_content:
+            return ['\n'.join(result_text), page_content]
+
         return result_text
 
     def get_current_san(self, user_id, slot_id, provided_san=None):

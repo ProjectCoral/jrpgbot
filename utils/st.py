@@ -15,52 +15,21 @@ import sqlite3
     .st show 灵感	//查看指定人物属性
     .st show //无参数时查看所有属性（不含默认值技能），请使用只st加点过技能的半自动人物卡！ //部分COC属性会被视为同义词，如智力/灵感、理智/san、侦查/侦察
 
-
-sqlite3数据库：
-                self.conn.execute('''
-                                CREATE TABLE IF NOT EXISTS users 
-                                (user_id INTEGER, 
-                                slot_id INTEGER, 
-                                name TEXT, 
-                                str INTEGER, 
-                                con INTEGER, 
-                                siz INTEGER, 
-                                dex INTEGER, 
-                                app INTEGER, 
-                                int INTEGER, 
-                                pow INTEGER, 
-                                edu INTEGER, 
-                                luk INTEGER,
-                                PRIMARY KEY (user_id, slot_id))''')
-                self.conn.execute('''
-                                CREATE TABLE IF NOT EXISTS status
-                                (user_id INTEGER, 
-                                slot_id INTEGER, 
-                                hp INTEGER, 
-                                mp INTEGER, 
-                                dmg TEXT,
-                                def TEXT, 
-                                san INTEGER,
-                                PRIMARY KEY (user_id, slot_id))''')
-                self.conn.execute('''
-                                CREATE TABLE IF NOT EXISTS skills
-                                (user_id INTEGER,
-                                slot_id INTEGER,
-                                skillname TEXT, 
-                                expression TEXT,
-                                PRIMARY KEY (user_id, slot_id, skillname))''')
-
 """
 
-def register_function(jrpg_functions, sqlite_conn):
-    StatusRecord_instance = StatusRecord(sqlite_conn)
+def register_function(jrpg_functions, jrpg_events, sqlite_conn):
+    StatusRecord_instance = StatusRecord(jrpg_functions, jrpg_events, sqlite_conn)
     jrpg_functions['st'] = StatusRecord_instance.st
 
 
 class StatusRecord:
+    jrpg_functions = None
+    jrpg_events = None
     sqlite_conn = None
 
-    def __init__(self, sqlite_conn):
+    def __init__(self, jrpg_functions, jrpg_events, sqlite_conn):
+        self.jrpg_functions = jrpg_functions
+        self.jrpg_events = jrpg_events
         self.sqlite_conn = sqlite_conn
 
     async def st(self, args, userslot, sender_user_id, group_id):
@@ -133,7 +102,7 @@ class StatusRecord:
             return f"已完成 {len(attributes)} 个属性录入"
         
         elif '=' in args:
-            # 录入新属性    
+            # 录入属性    
             attribute, value = args.split('=')
             attribute = attribute.strip().lower()
             value = value.strip()
@@ -149,7 +118,7 @@ class StatusRecord:
             else:
                 cursor.execute("INSERT INTO skills (user_id, slot_id, skillname, expression) VALUES (?, ?, ?, ?)", (sender_user_id, slot_id, attribute, value))
             self.sqlite_conn.commit()
-            return f"已录入属性 {attribute} 为 {value}"
+            result_text = f"已录入属性 {attribute} 为 {value}"
         
         elif '+' in args:
             # 增加属性值
@@ -169,7 +138,7 @@ class StatusRecord:
                     new_expression = f"{new_value}"
                     cursor.execute("UPDATE skills SET expression = ? WHERE user_id = ? AND slot_id = ? AND skillname = ?", (new_expression, sender_user_id, slot_id, attribute[1:]))
                     self.sqlite_conn.commit()
-                    return f"已更新属性 {attribute} 为 {new_value}"
+                    result_text = f"已更新属性 {attribute} 为 {new_value}"
                 else:
                     return f"未找到属性 {attribute}"
             elif attribute in CONTROLLABLE_ATTRIBUTES:
@@ -180,7 +149,7 @@ class StatusRecord:
                     new_expression = f"{new_value}"
                     cursor.execute(f"UPDATE status SET {attribute} = ? WHERE user_id = ? AND slot_id = ?", (new_expression, sender_user_id, slot_id))
                     self.sqlite_conn.commit()
-                    return f"已更新属性 {attribute} 为 {new_value}"
+                    result_text = f"已更新属性 {attribute} 为 {new_value}"
                     
             elif attribute in USER_ATTRIBUTES:
                 cursor.execute("SELECT * FROM users WHERE user_id = ? AND slot_id = ?", (sender_user_id, slot_id))
@@ -191,7 +160,7 @@ class StatusRecord:
                     new_value = current_value + int(value) if command == '+' else current_value - int(value)
                     cursor.execute(f"UPDATE users SET {attribute} = ? WHERE user_id = ? AND slot_id = ?", (new_value, sender_user_id, slot_id))
                     self.sqlite_conn.commit()
-                    return f"已更新属性 {attribute} 为 {new_value}"
+                    result_text = f"已更新属性 {attribute} 为 {new_value}"
                 else:
                     return f"未找到属性 {attribute}"
             else:
@@ -203,7 +172,7 @@ class StatusRecord:
                     new_expression = f"{new_value}"
                     cursor.execute("UPDATE skills SET expression = ? WHERE user_id = ? AND slot_id = ? AND skillname = ?", (new_expression, sender_user_id, slot_id, attribute))
                     self.sqlite_conn.commit()
-                    return f"已更新属性 {attribute} 为 {new_value}"
+                    result_text = f"已更新属性 {attribute} 为 {new_value}"
                 else:
                     return f"未找到属性 {attribute}"
 
@@ -225,7 +194,7 @@ class StatusRecord:
                     new_expression = f"{new_value}"
                     cursor.execute("UPDATE skills SET expression = ? WHERE user_id = ? AND slot_id = ? AND skillname = ?", (new_expression, sender_user_id, slot_id, attribute[1:]))
                     self.sqlite_conn.commit()
-                    return f"已更新属性 {attribute} 为 {new_value}"
+                    result_text = f"已更新属性 {attribute} 为 {new_value}"
                 else:
                     return f"未找到属性 {attribute}"
             elif attribute in CONTROLLABLE_ATTRIBUTES:
@@ -236,7 +205,7 @@ class StatusRecord:
                     new_expression = f"{new_value}"
                     cursor.execute(f"UPDATE status SET {attribute} = ? WHERE user_id = ? AND slot_id = ?", (new_expression, sender_user_id, slot_id))
                     self.sqlite_conn.commit()
-                    return f"已更新属性 {attribute} 为 {new_value}"
+                    result_text =  f"已更新属性 {attribute} 为 {new_value}"
             elif attribute in USER_ATTRIBUTES:
                 cursor.execute("SELECT * FROM users WHERE user_id = ? AND slot_id = ?", (sender_user_id, slot_id))
                 result = cursor.fetchone()
@@ -246,7 +215,7 @@ class StatusRecord:
                     new_value = current_value - int(value)
                     cursor.execute(f"UPDATE users SET {attribute} = ? WHERE user_id = ? AND slot_id = ?", (new_value, sender_user_id, slot_id))
                     self.sqlite_conn.commit()
-                    return f"已更新属性 {attribute} 为 {new_value}"
+                    result_text = f"已更新属性 {attribute} 为 {new_value}"
                 else:
                     return f"未找到属性 {attribute}"
             else:
@@ -258,12 +227,20 @@ class StatusRecord:
                     new_expression = f"{new_value}"
                     cursor.execute("UPDATE skills SET expression = ? WHERE user_id = ? AND slot_id = ? AND skillname = ?", (new_expression, sender_user_id, slot_id, attribute))
                     self.sqlite_conn.commit()
-                    return f"已更新属性 {attribute} 为 {new_value}"
+                    result_text = f"已更新属性 {attribute} 为 {new_value}"
                 else:
                     return f"未找到属性 {attribute}"
                 
         else:
             return "无效的命令，请检查输入"
+
+        page_content = None
+        page_content =  await self.jrpg_events['auto_event']('status_update', attribute, sender_user_id, group_id)
+        if page_content:
+            return ['\n'.join(result_text), page_content]
+
+        return result_text    
+    
 
     def evaluate_expression(self, expression):
         # 评估掷骰表达式

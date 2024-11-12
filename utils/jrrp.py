@@ -9,7 +9,7 @@ import sqlite3
 
 """
 
-def register_function(jrpg_functions, sqlite_conn):
+def register_function(jrpg_functions, jrpg_events, sqlite_conn):
     jrpg_functions['jrrp'] = jrrp().feach
 
 

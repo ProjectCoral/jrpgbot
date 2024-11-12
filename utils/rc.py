@@ -15,13 +15,19 @@ from typing import List, Tuple
 
 """
 
-def register_function(jrpg_functions, sqlite_conn):
-    RollCheck_instance = RollCheck(sqlite_conn)
+def register_function(jrpg_functions, jrpg_events, sqlite_conn):
+    RollCheck_instance = RollCheck(jrpg_functions, jrpg_events, sqlite_conn)
     jrpg_functions['rc'] = RollCheck_instance.rc
     jrpg_functions['ra'] = RollCheck_instance.rc
 
 class RollCheck:
-    def __init__(self, sqlite_conn):
+    jrpg_functions = None
+    jrpg_events = None
+    sqlite_conn = None
+
+    def __init__(self, jrpg_functions, jrpg_events, sqlite_conn):
+        self.jrpg_functions = jrpg_functions
+        self.jrpg_events = jrpg_events
         self.sqlite_conn = sqlite_conn
         self.cursor = sqlite_conn.cursor()
         self.special_skills = {
@@ -80,10 +86,22 @@ class RollCheck:
             success_rate = 100
 
         # 执行检定
+        page_content = None
         results = []
         for _ in range(rounds):
             result = self.perform_roll_check(skill_name, success_rate)
+            if rounds == 1:
+                if '成功' in result:
+                    page_content =  await self.jrpg_events['auto_event']('rc_success', skill_name, sender_user_id, group_id)
+                elif '失败' in result:
+                    if '大失败' in result:
+                        page_content =  await self.jrpg_events['auto_event']('rc_big_failure', skill_name, sender_user_id, group_id)
+                    else:
+                        page_content =  await self.jrpg_events['auto_event']('rc_failure', skill_name, sender_user_id, group_id)
             results.append(result)
+        
+        if page_content:
+            return ['\n'.join(results), page_content]
         
         return '\n'.join(results)
 
@@ -127,7 +145,7 @@ class RollCheck:
         if skill_name in self.special_skills:
             attr = self.special_skills[skill_name]
             if attr in user_attributes:
-                return skill_name, user_attributes[attr]
+                return attr, user_attributes[attr]
             
         # 如果只传入技能名，则尝试获取成功率
         if len(expression_parts) == 1:
@@ -166,7 +184,7 @@ class RollCheck:
 
     def perform_roll_check(self, skill_name: str, success_rate: int) -> str:
         roll = random.randint(1, 100)
-        if roll == 100:
+        if 96 <= roll <= 100:
             return f'检定 {skill_name} 大失败（1d100 = [{roll}] <= {success_rate}）'
         elif roll == 1:
             return f'检定 {skill_name} 大成功（1d100 = [{roll}] <= {success_rate}）'

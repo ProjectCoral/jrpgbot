@@ -23,6 +23,7 @@ class JRPGBot:
         self.config = config
         self.perm_system = perm_system
         self.jrpg_functions = {}
+        self.jrpg_events = {}
         self.load_db()
         self.load_functions()
         self.bot_status = False
@@ -36,7 +37,7 @@ class JRPGBot:
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
                 if hasattr(module, "register_function"):
-                    module.register_function(self.jrpg_functions, self.conn)
+                    module.register_function(self.jrpg_functions, self.jrpg_events, self.conn)
         logger.info(f"Loaded {len(self.jrpg_functions)} jrpg functions.")
 
     async def jrpg_command(self, message, **kwargs):
@@ -67,17 +68,26 @@ class JRPGBot:
             logger.exception(f"Error executing command {command}: {e}")
             return {"message": f"Error executing command: {e}", "sender_user_id": sender_user_id, "group_id": group_id}, True, False, 1
 
-        if group_id == -1:
-            result = f"警告：你正在私聊模式下使用JRPG Bot，可能无法正常运行。\n{result}"
-
         slot_id = self.userslot.get(sender_user_id)
         cursor = self.conn.cursor()
         cursor.execute("SELECT name FROM users WHERE user_id =? AND slot_id =?", (sender_user_id, slot_id,))
         name = cursor.fetchone()
-        if name is not None:
-            result = f"[{name[0]}] {result}"
 
-        result = f"[CQ:at,qq={sender_user_id}]\n{result}"
+        if isinstance(result, list):
+            if name is not None:
+                result[0] = f"[{name[0]}] {result[0]}"
+                result[0] = f"[CQ:at,qq={sender_user_id}]\n{result[0]}"
+
+            if group_id == -1:
+                result[0] = f"{result[0]}\n警告：你正在私聊模式下使用JRPG Bot，可能无法正常运行。"
+        else:
+            if name is not None:
+                result = f"[{name[0]}] {result}"
+
+            result = f"[CQ:at,qq={sender_user_id}]\n{result}"
+
+            if group_id == -1:
+                result = f"{result}\n警告：你正在私聊模式下使用JRPG Bot，可能无法正常运行。"
 
         return {"message": result, "sender_user_id": sender_user_id, "group_id": group_id}, True, False, 1
     

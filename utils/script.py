@@ -1,5 +1,6 @@
 import os
 import re
+import json
 
 """
 .script [页码] //翻页
@@ -19,20 +20,34 @@ text
 ...}
 """
 
-def register_function(jrpg_functions, sqlite_conn):
-    ScriptReader_instance = ScriptReader(sqlite_conn)
+def register_function(jrpg_functions, jrpg_events, sqlite_conn):
+    ScriptReader_instance = ScriptReader(jrpg_functions, jrpg_events, sqlite_conn)
     jrpg_functions['script'] = ScriptReader_instance.scriptreader
 
 class ScriptReader:
-    def __init__(self, sqlite_conn):
+    jrpg_functions = None
+    jrpg_events = None
+    sqlite_conn = None
+
+    def __init__(self, jrpg_functions, jrpg_events, sqlite_conn):
+        self.jrpg_functions = jrpg_functions
+        self.jrpg_events = jrpg_events
         self.sqlite_conn = sqlite_conn
         self.script_path = './data/jrpgbot/scripts'
+        self.script_list = []
+        self.script = {}
+        self.script_name = ''
+        self.current_page = None
+        self.last_group_id = None
+        self.ScriptEvent_instance = ScriptEvent(self)
         self.reload_script()
 
     def reload_script(self):
         self.script_list = []
         self.script = {}
         self.script_name = ''
+        self.current_page = None
+        self.ScriptEvent_instance.clear()
         if not os.path.exists(self.script_path):
             os.makedirs(self.script_path)
             
@@ -76,6 +91,9 @@ class ScriptReader:
                         matches = re.finditer(r'\[(\d+)\]\s*=\s*\[\[(.*?)\]\]', content, re.S | re.M)
                         self.script = {int(match.group(1)): match.group(2).strip() for match in matches}
                         self.script_name = script_name
+                    if os.path.exists(os.path.join(self.script_path, script_name,'auto.json')):
+                        self.ScriptEvent_instance.load(os.path.join(self.script_path, script_name,'auto.json'))
+                        return f'{script_name} 加载成功，共 {len(self.script)} 页。\n已加载 {len(self.ScriptEvent_instance.auto_event)} 个自动事件。'
                     return f'{script_name} 加载成功，共 {len(self.script)} 页。'
                 except Exception as e:
                     return f'加载剧本失败: {str(e)}'
@@ -91,16 +109,73 @@ class ScriptReader:
         if not result:
             return '你还没有角色卡，请先创建角色卡。'
 
+        self.last_group_id = group_id
+
         if command.isdigit():
-            page = int(command)
-            script_page = self.script.get(page, '')
-            if page == self.script.get(max(self.script.keys()), 0):
-                return script_page + '\n\n(已到达最后一页)'
-            if script_page:
-                return script_page
-            else:
-                return '指定页码未找到，请确认已加载正确的剧本。'
+            return self.get_page_content(command)
         else:
             return '请输入正确的页码或命令。'
         
-    
+    def get_page_content(self, page_num):
+        page = int(page_num)
+        if page < 1 or page > len(self.script):
+            return '指定页码不存在。'
+        script_page = self.script.get(page, '')
+        if script_page:
+            self.current_page = int(page)
+            return script_page
+        else:
+            return '指定页码不存在。'
+
+class ScriptEvent:
+    Reader = None
+
+    def __init__(self, Reader):
+        self.Reader = Reader
+        self.jrpg_functions = Reader.jrpg_functions
+        self.jrpg_events = Reader.jrpg_events
+        self.sqlite_conn = Reader.sqlite_conn
+        self.auto_event = {}
+        self.clear()
+        self.jrpg_events['auto_event'] = self.script_event
+
+    def clear(self):
+        self.auto_event = {}
+
+    def load(self, auto_json_path):
+        with open(auto_json_path, 'r', encoding='utf-8') as f:
+            self.auto_event = json.load(f)
+
+    async def script_event(self, event_name, skill_name, sender_user_id, group_id):
+        current_page = self.Reader.current_page 
+        if current_page is None or self.auto_event is None:
+            return None
+        
+        if self.Reader.last_group_id is not None and group_id != self.Reader.last_group_id:
+            return None
+
+        current_page = str(current_page)
+        if current_page in self.auto_event:
+            auto_event = self.auto_event[current_page]
+        else:
+            return None
+
+        if event_name not in auto_event:
+            return None
+
+        event_content = auto_event[event_name]
+        if isinstance(event_content, dict):
+            if skill_name in event_content:
+                goto_page = event_content[skill_name]
+            else:
+                return None
+        else:
+            goto_page = event_content
+        
+        if goto_page == 'end':
+            return '剧本结束。'
+        else:
+            page_content = self.Reader.get_page_content(int(goto_page))
+            return f'自动跳转到 {goto_page} 页。\n {page_content}'
+
+

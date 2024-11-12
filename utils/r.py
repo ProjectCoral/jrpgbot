@@ -19,15 +19,19 @@ import sqlite3
     .rs1D10+1D6+3 沙鹰伤害	//省略单个骰子的点数，直接给结果 //现版本开头的r不再可用o或d代替 //一次掷骰超过20个将会自动排序
 """
 
-def register_function(jrpg_functions, sqlite_conn):
-    RollDice_instance = RollDice(sqlite_conn)
+def register_function(jrpg_functions, jrpg_events, sqlite_conn):
+    RollDice_instance = RollDice(jrpg_functions, jrpg_events, sqlite_conn)
     jrpg_functions['r'] = RollDice_instance.r
 
 
 class RollDice:
+    jrpg_functions = None
+    jrpg_events = None
     sqlite_conn = None
 
-    def __init__(self, sqlite_conn):
+    def __init__(self, jrpg_functions, jrpg_events, sqlite_conn):
+        self.jrpg_functions = jrpg_functions
+        self.jrpg_events = jrpg_events
         self.conn = sqlite_conn
         self.cursor = self.conn.cursor()
 

@@ -8,54 +8,28 @@ import random
     .coc ([name])//默认生成7版人物
     .coc d ([name] [level] [hp] [mp] [atk] [def] [spd] [vit] [agi] [int] [luk]) //接d为详细作成，一次只能作成一个 
 
-
 .dnd DND人物作成
 
 用法：.dnd
 
     .dnd [name]//默认生成5版人物
 
-
-sqlite3数据库：
-
-CREATE TABLE IF NOT EXISTS users 
-(user_id INTEGER PRIMARY KEY, 
-name TEXT, 
-str INTEGER, 
-con INTEGER, 
-siz INTEGER, 
-dex INTEGER, 
-app INTEGER, 
-int INTEGER, 
-pow INTEGER, 
-edu INTEGER, 
-luk INTEGER)
-CREATE TABLE IF NOT EXISTS status
-(user_id INTEGER PRIMARY KEY, 
-name TEXT, 
-hp INTEGER, 
-mp INTEGER, 
-dmg TEXT, 
-def TEXT, 
-san INTEGER
-)
-CREATE TABLE IF NOT EXISTS skills
-(user_id INTEGER PRIMARY KEY, 
-name TEXT, 
-skillname TEXT, 
-expression TEXT)
 """
 
-def register_function(jrpg_functions, sqlite_conn):
-    Card_instance = Card(sqlite_conn)
+def register_function(jrpg_functions, jrpg_events, sqlite_conn):
+    Card_instance = Card(jrpg_functions, jrpg_events, sqlite_conn)
     jrpg_functions['coc'] = Card_instance.coc
     # jrpg_functions['dnd'] = Card_instance.dnd
     jrpg_functions['pc'] = Card_instance.pc
 
 class Card:
+    jrpg_functions = None
+    jrpg_events = None
     sqlite_conn = None
 
-    def __init__(self, sqlite_conn):
+    def __init__(self, jrpg_functions, jrpg_events, sqlite_conn):
+        self.jrpg_functions = jrpg_functions
+        self.jrpg_events = jrpg_events
         self.sqlite_conn = sqlite_conn
 
     async def coc(self, args, userslot, sender_user_id, group_id):
@@ -162,29 +136,24 @@ class Card:
         
         args = args.split()
 
-        if len(args) == 1:
-            if args[0] == 'list':
-                # 列出所有卡片
-                cursor = self.sqlite_conn.execute("SELECT name FROM users WHERE user_id=?", (sender_user_id,))
-                rows = cursor.fetchall()
-                if not rows:
-                    return '还没有创建任何卡片！'
-                else:
-                    return '你的卡片：\n' + '\n'.join([row[0] for row in rows])
-            if args[0] == 'del':
-                # 删除当前卡片
-                slot_id = userslot.get(sender_user_id)
-                with self.sqlite_conn:
-                    self.sqlite_conn.execute("DELETE FROM users WHERE user_id=? AND slot_id=?", (sender_user_id, slot_id,))
-                    self.sqlite_conn.execute("DELETE FROM status WHERE user_id=? AND slot_id=?", (sender_user_id, slot_id,))
-                    self.sqlite_conn.execute("DELETE FROM skills WHERE user_id=? AND slot_id=?", (sender_user_id, slot_id,))
-                return f'已删除slot{slot_id}的卡片！'
-            if args[0] == 'slot':
-                userslot.get(sender_user_id)
-                return f'当前slot：{userslot.get(sender_user_id)}'
-        
-        if len(args) == 2:
-            if args[0] == 'slot':
+        if args[0] == 'list':
+            # 列出所有卡片
+            cursor = self.sqlite_conn.execute("SELECT name FROM users WHERE user_id=?", (sender_user_id,))
+            rows = cursor.fetchall()
+            if not rows:
+                return '还没有创建任何卡片！'
+            else:
+                return '你的卡片：\n' + '\n'.join([row[0] for row in rows])
+        elif args[0] == 'del':
+            # 删除当前卡片
+            slot_id = userslot.get(sender_user_id)
+            with self.sqlite_conn:
+                self.sqlite_conn.execute("DELETE FROM users WHERE user_id=? AND slot_id=?", (sender_user_id, slot_id,))
+                self.sqlite_conn.execute("DELETE FROM status WHERE user_id=? AND slot_id=?", (sender_user_id, slot_id,))
+                self.sqlite_conn.execute("DELETE FROM skills WHERE user_id=? AND slot_id=?", (sender_user_id, slot_id,))
+            return f'已删除slot{slot_id}的卡片！'
+        elif args[0] == 'slot':
+            if len(args) == 2:
                 # 切换卡片
                 try:
                     slot_id = int(args[1])
@@ -194,8 +163,26 @@ class Card:
                     return 'slot_id必须为1-5！'
                 userslot.set(sender_user_id, slot_id)
                 return f'已切换到slot{slot_id}！'
-            
-        return 'Usage: .pc list | .pc slot (slot_id) | .pc del'
+            else:
+                userslot.get(sender_user_id)
+                return f'当前slot：{userslot.get(sender_user_id)}'
+        elif args[0] == 'new':
+            # 新建卡片
+            slot_id = userslot.get(sender_user_id)
+            if len(args) == 2:
+                name = args[1]
+            else:
+                name = '未命名'
+            cursor = self.sqlite_conn.execute("SELECT * FROM users WHERE user_id=? AND slot_id=?", (sender_user_id, slot_id,))
+            row = cursor.fetchone()
+            if row is not None:
+                return f'你的slot{slot_id}已有人物，请使用.pc slot (slot_id)切换卡槽或.pc del删除当前卡片！'
+            with self.sqlite_conn:
+                self.sqlite_conn.execute("INSERT INTO users (user_id, slot_id, name, str, con, siz, dex, app, int, pow, edu, luk) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (sender_user_id, slot_id, name, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+                self.sqlite_conn.execute("INSERT INTO status (user_id, slot_id, hp, mp, dmg, def, san) VALUES (?, ?, ?, ?, ?, ?, ?)", (sender_user_id, slot_id, 0, 0, 0, 0, 0))
+            return f'已新建 {name} 卡片！请录入属性！'
+        
+        return 'Usage: .pc list | .pc slot [slot_id] | .pc del | .pc new [name]'
 
     def rich_text(self, STR, con, siz, dex, app, int, POW, edu, luk):
         """
