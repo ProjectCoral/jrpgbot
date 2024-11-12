@@ -71,7 +71,7 @@ class RollCheck:
             return '用户未设置属性，请先设置属性'
         
         # 解析检定内容
-        skill_name, success_rate = self.parse_skill_name_and_success_rate(args, user_attributes)
+        skill_name, success_rate, reason = self.parse_skill_name_and_success_rate(args, user_attributes)
         if not skill_name:
             return '无效的检定内容'
         
@@ -88,6 +88,8 @@ class RollCheck:
         # 执行检定
         page_content = None
         results = []
+        if reason:
+            results.append(f'（{reason}）')
         for _ in range(rounds):
             result = self.perform_roll_check(skill_name, success_rate)
             if rounds == 1:
@@ -100,6 +102,9 @@ class RollCheck:
                         page_content =  await self.jrpg_events['auto_event']('rc_failure', skill_name, sender_user_id, group_id)
             results.append(result)
         
+        if skill_name in ['hp', 'mp', 'dmg', 'def']:
+            results.append("你为什么要检定这个？")
+
         if page_content:
             return ['\n'.join(results), page_content]
         
@@ -114,6 +119,13 @@ class RollCheck:
         if row:
             user_attributes.update({col[0]: row[i] for i, col in enumerate(self.cursor.description)})
         
+        # 查询 status 表
+        self.cursor.execute("SELECT * FROM status WHERE user_id=? AND slot_id=?", (user_id, slot_id,))
+        row = self.cursor.fetchone()
+        if row:
+            for i, col in enumerate(self.cursor.description):
+                user_attributes[col[0]] = row[i]
+
         # 查询 skills 表
         self.cursor.execute("SELECT * FROM skills WHERE user_id=? AND slot_id=?", (user_id, slot_id,))
         rows = self.cursor.fetchall()
@@ -124,19 +136,28 @@ class RollCheck:
         
         return user_attributes
 
-    def parse_skill_name_and_success_rate(self, args: str, user_attributes: dict) -> Tuple[str, int]:
+    def parse_skill_name_and_success_rate(self, args: str, user_attributes: dict) -> Tuple[str, int, str]:
+        # 提取 reason
+        reason = ''
+        if ' ' in args:
+            parts = args.split(maxsplit=1)
+            if len(parts) > 1 and not parts[1].isdigit():
+                if not any(op in parts[1] for op in ['+', '-', '*', '/']):
+                    reason = parts[1]
+                    args = parts[0]
+
         # 处理特殊关键词
         keywords = ['困难', '极难', '自动成功']
         for keyword in keywords:
             if args.startswith(keyword):
                 skill_name = args[len(keyword):].strip()
                 if keyword == '自动成功':
-                    return skill_name, 100
+                    return skill_name, 100, reason
                 elif keyword == '困难':
-                    return skill_name, 20
+                    return skill_name, 20, reason
                 elif keyword == '极难':
-                    return skill_name, 10
-       
+                    return skill_name, 10, reason
+        
         # 分割技能名和表达式
         expression_parts = args.split()
         skill_name = expression_parts[0]
@@ -145,13 +166,13 @@ class RollCheck:
         if skill_name in self.special_skills:
             attr = self.special_skills[skill_name]
             if attr in user_attributes:
-                return attr, user_attributes[attr]
+                return attr, user_attributes[attr], reason
             
         # 如果只传入技能名，则尝试获取成功率
         if len(expression_parts) == 1:
             if skill_name in user_attributes:
                 success_rate = user_attributes[skill_name]
-                return skill_name, success_rate
+                return skill_name, success_rate, reason
     
         # 处理表达式
         expression = ''.join(expression_parts[1:])
@@ -169,18 +190,18 @@ class RollCheck:
                         dice_num = int(dice_num)
                         dice_size = int(dice_size)
                         if dice_num < 1 or dice_size < 1:
-                            return None, None
+                            return None, None, reason
                         success_rate = sum([random.randint(1, dice_size) for _ in range(dice_num)])
-                        return skill_name, success_rate
+                        return skill_name, success_rate, reason
                     except ValueError:
-                        return None, None
+                        return None, None, reason
                 else:
-                    return None, None
+                    return None, None, reason
             if success_rate < 1 or success_rate > 1000:
-                return None, None
-            return skill_name, success_rate
+                return None, None, reason
+            return skill_name, success_rate, reason
         except Exception as e:
-            return None, None
+            return None, None, reason
 
     def perform_roll_check(self, skill_name: str, success_rate: int) -> str:
         roll = random.randint(1, 100)
