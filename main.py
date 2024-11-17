@@ -41,12 +41,13 @@ class JRPGBot:
         logger.info(f"Loaded {len(self.jrpg_functions)} jrpg functions.")
 
     async def jrpg_command(self, message, **kwargs):
-        raw_message = message['message']
-        sender_user_id = message['sender_user_id']
-        group_id = message['group_id']
+        ori_message = message[0]
+        raw_message = ori_message['message']
+        sender_user_id = ori_message['sender_user_id']
+        group_id = ori_message['group_id']
 
         if not raw_message.startswith('.'):
-            return {"message": None, "sender_user_id": sender_user_id, "group_id": group_id}, False, False, 1
+            return None, False, 1
 
         logger.info(f"Received jrpg command from {sender_user_id} in {group_id}: {raw_message}")
 
@@ -54,19 +55,19 @@ class JRPGBot:
             command = raw_message[1:].split()[0]
             args = raw_message[1:].split()[1:]
         except IndexError:
-            return {"message": "Invalid command format.", "sender_user_id": sender_user_id, "group_id": group_id}, True, False, 1
+            return {"action": "send_msg", "message": "Invalid command format.", "sender_user_id": sender_user_id, "group_id": group_id}, False, 1
         
         if not self.bot_status and command not in ["bot", "info"]:
-                return {"message": None, "sender_user_id": sender_user_id, "group_id": group_id}, False, False, 1
+                return None, False, 1
 
         if command not in self.jrpg_functions:
-            return {"message": f"Command {command} not found.", "sender_user_id": sender_user_id, "group_id": group_id}, True, False, 1
+            return {"action": "send_msg", "message": f"Command {command} not found.", "sender_user_id": sender_user_id, "group_id": group_id}, False, 1
         
         try:
             result = await self.jrpg_functions[command](args, self.userslot, sender_user_id, group_id)
         except Exception as e:
             logger.exception(f"Error executing command {command}: {e}")
-            return {"message": f"Error executing command: {e}", "sender_user_id": sender_user_id, "group_id": group_id}, True, False, 1
+            return {"action": "send_msg", "message": f"Error executing command: {e}", "sender_user_id": sender_user_id, "group_id": group_id}, False, 1
 
         slot_id = self.userslot.get(sender_user_id)
         cursor = self.conn.cursor()
@@ -89,7 +90,7 @@ class JRPGBot:
             if group_id == -1:
                 result = f"{result}\n警告：你正在私聊模式下使用JRPG Bot，可能无法正常运行。"
 
-        return {"message": result, "sender_user_id": sender_user_id, "group_id": group_id}, True, False, 1
+        return {"action": "send_msg", "message": result, "sender_user_id": sender_user_id, "group_id": group_id}, False, 1
     
     async def bot_control(self, args, userslot, sender_user_id, group_id):
         if not self.perm_system.check_perm(["jrpgbot", "jrpgbot.control"], sender_user_id, group_id):
